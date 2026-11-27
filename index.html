@@ -1,0 +1,911 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SI-HadirGuru - Presensi Kelas</title>
+    <!-- Tailwind CSS untuk Styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Library Ekspor Excel & PDF -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8fafc; 
+        }
+        .toast-enter {
+            transform: translateY(100%);
+            opacity: 0;
+            transition: all 0.3s ease-out;
+        }
+        .toast-enter-active {
+            transform: translateY(0);
+            opacity: 1;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-4">
+
+    <!-- Container Utama -->
+    <div class="max-w-2xl w-full bg-white rounded-2xl shadow-xl overflow-hidden">
+        
+        <!-- Banner -->
+        <div class="w-full h-32 md:h-48 bg-gray-200 relative">
+            <img src="https://images.unsplash.com/photo-1577896851231-70ef18881754?auto=format&fit=crop&q=80&w=1000" alt="Banner Sekolah" class="w-full h-full object-cover mix-blend-overlay">
+            <div class="absolute inset-0 bg-emerald-900 bg-opacity-60 flex flex-col items-center justify-center text-white px-4 text-center">
+                <h1 class="text-2xl md:text-4xl font-bold mb-2 shadow-sm">SI-HadirGuru</h1>
+                <p class="text-emerald-50 font-medium text-sm md:text-base shadow-sm">Sistem Presensi Terintegrasi - UPT SMAN 3 Sinjai</p>
+            </div>
+        </div>
+
+        <!-- Navigation Tabs (Sistem Multi-User) -->
+        <div class="flex border-b border-gray-200 bg-white">
+            <button onclick="switchTab('guru')" id="tab-guru" class="flex-1 py-3 text-sm font-semibold text-emerald-600 border-b-2 border-emerald-600 focus:outline-none transition-colors">
+                👨‍🏫 Form Presensi Guru
+            </button>
+            <button onclick="switchTab('admin')" id="tab-admin" class="flex-1 py-3 text-sm font-semibold text-gray-500 hover:text-emerald-600 focus:outline-none transition-colors">
+                📊 Dashboard Piket
+            </button>
+        </div>
+
+        <!-- View Form Section (Mode Guru) -->
+        <div id="view-guru" class="p-6 md:p-8">
+            <div class="mb-6 bg-blue-50 border-l-4 border-blue-500 p-4 rounded">
+                <p class="text-sm text-blue-700">
+                    <strong>Penting:</strong> Form ini terhubung ke *Cloud* secara *real-time*. Tim Piket akan memantau status kehadiran untuk mengantisipasi terjadinya jam kosong.
+                </p>
+            </div>
+
+            <form id="absensi-form" class="space-y-5">
+
+                <!-- Pilihan Cepat Otomatis Sesuai SK TP 2026/2027 -->
+                <div class="bg-emerald-50/60 border border-emerald-200 rounded-xl p-4 space-y-4">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-bold uppercase tracking-wider text-emerald-800">Klik Cepat Kelas, Guru & Mapel (SK 2026/2027)</span>
+                        <button type="button" id="btn-toggle-all-guru" onclick="toggleShowAllGuru()" class="text-[11px] text-emerald-700 underline font-semibold hover:text-emerald-900">
+                            Tampilkan Semua Guru
+                        </button>
+                    </div>
+
+                    <!-- 1. Tingkatan Kelas -->
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-700 mb-1.5">1. Tingkatan Kelas</label>
+                        <div id="quick-tingkat" class="flex flex-wrap gap-2"></div>
+                    </div>
+
+                    <!-- 2. Rombel Kelas -->
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-700 mb-1.5">2. Pilih Kelas (Klik)</label>
+                        <div id="quick-kelas" class="flex flex-wrap gap-2"></div>
+                    </div>
+
+                    <!-- 3. Nama Guru -->
+                    <div>
+                        <label id="label-quick-guru" class="block text-xs font-semibold text-gray-700 mb-1.5">3. Pilih Nama Guru Mengajar (Klik)</label>
+                        <div id="quick-guru" class="flex flex-wrap gap-1.5 max-h-40 overflow-y-auto pr-1"></div>
+                    </div>
+
+                    <!-- 4. Mata Pelajaran -->
+                    <div>
+                        <label id="label-quick-mapel" class="block text-xs font-semibold text-gray-700 mb-1.5">4. Pilih Mata Pelajaran (Klik)</label>
+                        <div id="quick-mapel" class="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto pr-1"></div>
+                    </div>
+                </div>
+                
+                <!-- Tanggal & Pertemuan (Grid) -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <div>
+                        <label for="tanggal" class="block text-sm font-semibold text-gray-700 mb-1">Tanggal <span class="text-red-500">*</span></label>
+                        <input type="date" id="tanggal" name="tanggal" required
+                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all">
+                    </div>
+                    <div>
+                        <label for="pertemuan" class="block text-sm font-semibold text-gray-700 mb-1">Pertemuan Ke- <span class="text-red-500">*</span></label>
+                        <input type="number" id="pertemuan" name="pertemuan" min="1" required placeholder="Contoh: 1"
+                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all">
+                    </div>
+                </div>
+
+                <!-- Kelas Terpilih -->
+                <div>
+                    <label for="kelas" class="block text-sm font-semibold text-gray-700 mb-1">Kelas <span class="text-red-500">*</span></label>
+                    <input type="text" id="kelas" name="kelas" list="list-kelas" required placeholder="Klik kelas di atas atau ketik..."
+                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all">
+                    <datalist id="list-kelas"></datalist>
+                </div>
+
+                <!-- Nama Guru -->
+                <div>
+                    <label for="nama_guru" class="block text-sm font-semibold text-gray-700 mb-1">Nama Guru <span class="text-red-500">*</span></label>
+                    <input type="text" id="nama_guru" name="nama_guru" list="list-guru" required placeholder="Klik nama guru di atas atau ketik..."
+                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all">
+                    <datalist id="list-guru"></datalist>
+                </div>
+
+                <!-- Mata Pelajaran -->
+                <div>
+                    <label for="mata_pelajaran" class="block text-sm font-semibold text-gray-700 mb-1">Mata Pelajaran <span class="text-red-500">*</span></label>
+                    <input type="text" id="mata_pelajaran" name="mata_pelajaran" list="list-mapel" required placeholder="Klik mata pelajaran di atas atau ketik..."
+                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all">
+                    <datalist id="list-mapel"></datalist>
+                </div>
+
+                <!-- Status Kehadiran -->
+                <div>
+                    <label for="status_kehadiran" class="block text-sm font-semibold text-gray-700 mb-1">Status Kehadiran <span class="text-red-500">*</span></label>
+                    <select id="status_kehadiran" name="status_kehadiran" required
+                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all bg-white">
+                        <option value="" disabled selected>-- Pilih Status Kelas --</option>
+                        <option value="Hadir Tatap Muka">🟢 Hadir Tatap Muka</option>
+                        <option value="Hadir - Memberi Tugas">🟡 Hadir (Hanya Memberi Tugas)</option>
+                        <option value="Tugas Mandiri (PJJ)">🟠 Tugas Mandiri / PJJ</option>
+                        <option value="Izin/Sakit (Kelas Kosong)">🔴 Izin/Sakit (Peringatan Kelas Kosong)</option>
+                    </select>
+                </div>
+
+                <!-- Jam Masuk & Jam Keluar (Grid) -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <div>
+                        <label for="jam_masuk" class="block text-sm font-semibold text-gray-700 mb-1">Jam Masuk <span class="text-red-500">*</span></label>
+                        <input type="time" id="jam_masuk" name="jam_masuk" required
+                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all">
+                    </div>
+                    <div>
+                        <label for="jam_keluar" class="block text-sm font-semibold text-gray-700 mb-1">Jam Keluar <span class="text-red-500">*</span></label>
+                        <input type="time" id="jam_keluar" name="jam_keluar" required
+                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all">
+                    </div>
+                </div>
+
+                <!-- Jumlah Siswa & Upload Foto -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <div>
+                        <label for="jumlah_siswa" class="block text-sm font-semibold text-gray-700 mb-1">Jumlah Siswa Hadir <span class="text-red-500">*</span></label>
+                        <input type="number" id="jumlah_siswa" name="jumlah_siswa" min="0" required placeholder="Misal: 32"
+                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all">
+                    </div>
+                    <div>
+                        <label for="foto" class="block text-sm font-semibold text-gray-700 mb-1">Foto Pembelajaran <span class="text-xs text-gray-500">(Opsional, kompresi cepat ±180 KB)</span></label>
+                        <input type="file" id="foto" name="foto" accept="image/*"
+                            class="w-full px-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all text-sm file:mr-3 file:py-1.5 file:px-3 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100">
+                        <p id="foto-info" class="text-xs text-emerald-600 mt-1 hidden"></p>
+                    </div>
+                </div>
+
+                <!-- Materi / Catatan -->
+                <div>
+                    <label for="materi" class="block text-sm font-semibold text-gray-700 mb-1">Materi / Catatan Pembelajaran <span class="text-red-500">*</span></label>
+                    <textarea id="materi" name="materi" rows="3" required placeholder="Jelaskan materi yang diajarkan atau catatan penting..."
+                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all resize-none"></textarea>
+                </div>
+
+                <!-- Opsi Notifikasi WhatsApp API -->
+                <div class="flex items-start bg-emerald-50 p-3 rounded-lg border border-emerald-100">
+                    <div class="flex items-center h-5">
+                        <input id="notif_wa" name="notif_wa" type="checkbox" value="ya" class="w-4 h-4 text-emerald-600 bg-white border-gray-300 rounded focus:ring-emerald-500 focus:ring-2 cursor-pointer">
+                    </div>
+                    <div class="ml-3 text-sm">
+                        <label for="notif_wa" class="font-medium text-emerald-800 cursor-pointer">Kirim Notifikasi ke WhatsApp Tim Piket</label>
+                        <p class="text-emerald-600 text-xs mt-0.5">Centang opsi ini jika kelas kosong atau butuh penanganan khusus agar tim piket segera memantau.</p>
+                    </div>
+                </div>
+
+                <!-- Tombol Submit -->
+                <div class="pt-2">
+                    <button type="submit" id="btn-submit" 
+                        class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-3 px-4 rounded-lg shadow-md hover:shadow-lg transition-all duration-300 flex justify-center items-center">
+                        <svg id="loading-icon" class="animate-spin -ml-1 mr-3 h-5 w-5 text-white hidden" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        <span id="btn-text">Simpan Kehadiran</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+        
+        <!-- View Admin/Dashboard (Tersembunyi secara default) -->
+        <div id="view-admin" class="hidden p-6 md:p-8 space-y-6">
+            <div class="bg-emerald-50 border border-emerald-200 p-5 rounded-lg text-center">
+                <h3 class="text-lg font-bold text-emerald-800 mb-2">Live Dashboard & Pemantauan</h3>
+                <p class="text-sm text-emerald-600 mb-4">Akses khusus untuk Tim Piket, Kurikulum, dan Kepala Sekolah. Pantau kelas secara real-time dan ekspor laporan ke Excel/PDF.</p>
+                <a href="https://docs.google.com/spreadsheets/d/19CNVEKu5TH9yfvGp6jKFaH2x4u9_E_kTQfLfOCV54YE/edit?gid=0#gid=0" target="_blank" class="inline-block bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2 px-6 rounded shadow transition-all">
+                    Buka Live Dashboard (Google Sheets)
+                </a>
+            </div>
+
+            <!-- Tabel Live Monitoring Piket -->
+            <div class="bg-white border border-gray-200 p-5 rounded-lg space-y-4">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div>
+                        <div class="flex items-center space-x-2">
+                            <h4 class="font-bold text-gray-800">Pantauan Kehadiran Real-Time</h4>
+                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">
+                                <span class="w-2 h-2 mr-1.5 bg-emerald-500 rounded-full animate-ping"></span> Live Sync 15d
+                            </span>
+                        </div>
+                        <p id="last-sync-text" class="text-xs text-gray-500 mt-0.5">Menunggu pembaruan data...</p>
+                    </div>
+                    <div class="flex flex-wrap gap-2">
+                        <button type="button" onclick="renderMonitoringTable()" class="bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-semibold px-3 py-2 rounded-lg transition">
+                            ↻ Refresh
+                        </button>
+                        <button type="button" onclick="exportRekapExcel()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3 py-2 rounded-lg transition">
+                            📊 Unduh Excel
+                        </button>
+                        <button type="button" onclick="exportRekapPDF()" class="bg-red-600 hover:bg-red-700 text-white text-xs font-semibold px-3 py-2 rounded-lg transition">
+                            📄 Unduh PDF
+                        </button>
+                    </div>
+                </div>
+
+                <div id="area-rekap-cetak" class="overflow-x-auto">
+                    <table id="tabel-monitoring-piket" class="w-full text-left border-collapse text-xs">
+                        <thead>
+                            <tr class="bg-emerald-50 text-emerald-900 border-b border-emerald-200">
+                                <th class="p-2.5 font-semibold">Tanggal</th>
+                                <th class="p-2.5 font-semibold">Kelas & Pert.</th>
+                                <th class="p-2.5 font-semibold">Nama Guru & Mapel</th>
+                                <th class="p-2.5 font-semibold">Status</th>
+                                <th class="p-2.5 font-semibold">Jam</th>
+                                <th class="p-2.5 font-semibold">Siswa</th>
+                                <th class="p-2.5 font-semibold">Materi & Bukti</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbody-monitoring-piket" class="divide-y divide-gray-100">
+                            <tr>
+                                <td colspan="7" class="p-4 text-center text-gray-400">Belum ada data presensi tercatat.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="bg-white border border-gray-200 p-5 rounded-lg">
+                <h4 class="font-bold text-gray-800 mb-3 flex items-center">
+                    <svg class="w-5 h-5 mr-2 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                    Cara Cetak Laporan (PDF/Excel)
+                </h4>
+                <ol class="list-decimal list-inside text-sm text-gray-600 space-y-2">
+                    <li>Klik tombol Buka Live Dashboard di atas.</li>
+                    <li>Di Google Sheets, klik menu <strong>File</strong> &gt; <strong>Download</strong>.</li>
+                    <li>Pilih format <strong>Microsoft Excel (.xlsx)</strong> atau <strong>Dokumen PDF (.pdf)</strong>.</li>
+                    <li>Laporan siap diserahkan ke Pimpinan Sekolah!</li>
+                </ol>
+            </div>
+        </div>
+    </div>
+
+    <!-- Custom Toast Notification -->
+    <div id="toast" class="fixed bottom-5 right-5 max-w-sm w-full bg-green-500 text-white px-6 py-4 rounded-xl shadow-2xl toast-enter flex items-center justify-between pointer-events-none z-50">
+        <div class="flex items-center">
+            <svg class="w-6 h-6 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+            <span id="toast-message" class="font-medium">Data berhasil disimpan!</span>
+        </div>
+    </div>
+
+    <script>
+        // URL WEB APP GOOGLE APPS SCRIPT SI-HADIRGURU
+        const scriptURL = 'https://script.google.com/macros/s/AKfycbwAYmEjwfEsTJs7VKi4BedZOyYcdYww4_PU3XpQhJtZXhdIihzumpjpMFMBEyJruGcdvQ/exec';
+        // NOMOR WA TIM KOORDINATOR PIKET
+        const WA_PIKET_NUMBER = '6285299414540';
+        const LOG_STORAGE_KEY = 'sihadirguru_xi4_logbook_v1';
+        let piketAutoRefreshTimer = null;
+        let compressedFotoFile = null;
+        let pendingWaUrl = null;
+
+        // Data Tingkatan Kelas & Rombel Sesuai SK Kepala UPT SMAN 3 Sinjai No. 826/216-UPT SMA.3/SJ/DISDIK
+        const KELAS_PER_TINGKAT = {
+            "X": ["X 1", "X 2", "X 3", "X 4", "X 5"],
+            "XI": ["XI 1", "XI 2", "XI 3", "XI 4"],
+            "XII": ["XII 1", "XII 2", "XII 3", "XII 4", "XII 5"]
+        };
+
+        // Data Lengkap 38 Guru, Mata Pelajaran & Kelas Mengajar Sesuai SK TP. 2026/2027
+        const SK_GURU_LIST = [
+            { nama: "Ichwal, S.Pd., M.Pd", mapel: ["PJOK"], kelas: [] },
+            { nama: "Dahlan Abdullah, S.Pd., M.Pd", mapel: ["IPA (Kimia)", "Kimia Pilihan"], kelas: ["X 1", "XI 3", "XI 4"] },
+            { nama: "Asyhari, S.Sos., M.Pd", mapel: ["IPS (Sosiologi)", "Sosiologi Pilihan"], kelas: ["X 1", "XII 3", "XII 4"] },
+            { nama: "Drs. Bahtiar", mapel: ["Sejarah"], kelas: ["X 1", "X 2", "X 3", "X 4"] },
+            { nama: "Rafidah, S.Pd", mapel: ["IPA (Fisika)"], kelas: ["X 2", "X 3", "X 4", "X 5"] },
+            { nama: "Hj. Darnawati, S.Pd", mapel: ["IPA (Fisika)", "Fisika Pilihan"], kelas: ["X 1", "XI 3", "XI 4"] },
+            { nama: "Dra. Misbah L., MM", mapel: ["Bahasa Indonesia"], kelas: ["XII 1", "XII 2", "XII 3"] },
+            { nama: "Nurhayati Yusuf, S.Pd", mapel: ["IPA (Fisika)", "Fisika Pilihan"], kelas: ["XI 1", "XI 2", "XII 3", "XII 4"] },
+            { nama: "Dra. St. Hasrah", mapel: ["Bahasa Indonesia"], kelas: ["XI 1", "XI 2", "XI 3", "XI 4", "XII 4", "XII 5"] },
+            { nama: "Rahmah, S.Pd", mapel: ["Matematika"], kelas: ["X 1", "X 2", "X 3", "X 4", "X 5"] },
+            { nama: "Rosdiana, S.Pd", mapel: ["Matematika", "Matematika TL"], kelas: ["XI 1", "XI 2", "XII 2", "XII 3", "XII 4"] },
+            { nama: "Rohani, S.Pd", mapel: ["Matematika"], kelas: ["XI 3", "XI 4", "XII 1", "XII 2"] },
+            { nama: "Dra. Hj. Hasniar", mapel: ["Bahasa Jerman"], kelas: ["XI 2", "XI 3", "XII 3", "XII 5"] },
+            { nama: "Suriati Mustamin, S.Pd", mapel: ["Seni Budaya"], kelas: ["X 1", "X 2", "XI 1", "XI 2", "XI 3", "XI 4", "XII 1", "XII 2", "XII 3", "XII 4", "XII 5"] },
+            { nama: "Nurwati, S.Pd., M.Pd., Gr.", mapel: ["IPA (Kimia)", "Kimia Pilihan"], kelas: ["X 2", "X 3", "X 4", "X 5", "XII 3", "XII 4"] },
+            { nama: "Nuraeni, SS", mapel: ["Bahasa Inggris"], kelas: ["XI 1", "XI 2", "XI 3", "XI 4", "XII 4", "XII 5"] },
+            { nama: "Nurhayati, S.Pd., M.Pd", mapel: ["Bahasa Inggris", "Bahasa Inggris TL"], kelas: ["X 5", "XI 3", "XI 4", "XII 1", "XII 2", "XII 3"] },
+            { nama: "Musdawati Mustafa, S.Pd., Gr", mapel: ["PPKn"], kelas: ["X 1", "X 2", "X 3", "X 4", "X 5", "XI 1", "XI 2", "XI 3", "XI 4", "XII 1", "XII 2", "XII 3"] },
+            { nama: "Rita Armanita, S.Pd", mapel: ["IPA (Biologi)", "Biologi Pilihan"], kelas: ["X 3", "X 4", "X 5", "XII 3", "XII 4"] },
+            { nama: "Nasrawati, S.Pd., Gr.", mapel: ["IPS (Geografi)", "Geografi Pilihan"], kelas: ["X 1", "X 2", "X 3", "X 4", "X 5", "XII 3"] },
+            { nama: "Sri Umiyati Syam, S.Pd", mapel: ["Ekonomi Pilihan"], kelas: ["XI 2", "XI 3", "XII 1", "XII 2"] },
+            { nama: "Sabriah, S.Pd., Gr.", mapel: ["Kewirausahaan", "IPA (Biologi)"], kelas: ["X 1", "X 2", "XI 1", "XI 2", "XI 3", "XI 4", "XII 1", "XII 2", "XII 3", "XII 4", "XII 5"] },
+            { nama: "Adriansyah, S.Pd., Gr", mapel: ["Seni Budaya", "Mulok Bahasa Bugis"], kelas: ["X 1", "X 2", "X 3", "X 4", "X 5", "XI 1", "XI 2", "XI 3", "XI 4", "XII 1", "XII 2", "XII 3", "XII 4", "XII 5"] },
+            { nama: "Muhammad Alyas, S.Pd., Gr.", mapel: ["Sejarah"], kelas: ["X 5", "XI 1", "XI 2", "XI 3", "XI 4", "XII 1", "XII 2", "XII 3", "XII 4", "XII 5"] },
+            { nama: "Nursiah, S.Pd., Gr", mapel: ["Bahasa Indonesia"], kelas: ["X 1", "X 2", "X 3", "X 4", "X 5"] },
+            { nama: "Asmar, S.Pd., Gr.", mapel: ["PJOK"], kelas: ["XI 1", "XI 2", "XI 3", "XI 4", "XII 1", "XII 2", "XII 3"] },
+            { nama: "Diaul Khaerah, S.Pd., Gr", mapel: ["PAI"], kelas: ["XI 1", "XI 2", "XI 3", "XI 4", "XII 1", "XII 2", "XII 3"] },
+            { nama: "Makkasau, S.Pd., Gr.", mapel: ["PAI"], kelas: ["X 1", "X 2", "X 3", "X 4", "X 5", "XII 4", "XII 5"] },
+            { nama: "Abd. Haris, S.Pd", mapel: ["BK"], kelas: ["X 1", "X 2", "X 3", "X 4", "X 5", "XI 1", "XI 2", "XI 3", "XI 4", "XII 1", "XII 2", "XII 3", "XII 4", "XII 5"] },
+            { nama: "Rustan, S.Pd., Gr", mapel: ["Ekonomi", "Kewirausahaan"], kelas: ["X 1", "X 2", "X 3", "X 4", "X 5", "XI 1", "XI 2"] },
+            { nama: "Dewi Purnama, S.Pd., Gr", mapel: ["Informatika", "Koding dan KA"], kelas: ["X 1", "X 2", "X 4", "X 5", "XI 4", "XII 5"] },
+            { nama: "Muh. Jalil, S.Pd", mapel: ["PJOK"], kelas: ["X 1", "X 2", "X 3", "X 4", "X 5", "XII 4", "XII 5"] },
+            { nama: "Nella Rezki, S.Pd., Gr", mapel: ["Informatika", "Koding dan KA", "Matematika"], kelas: ["X 1", "X 2", "X 3", "X 4", "X 5", "XI 2", "XI 3"] },
+            { nama: "Erna A Hamzah, S.Pd., Gr.", mapel: ["IPA (Biologi)", "Biologi Pilihan"], kelas: ["X 1", "X 2", "X 3", "X 4", "X 5", "XI 1", "XI 2", "XI 3", "XI 4", "XII 1", "XII 2", "XII 3", "XII 4", "XII 5"] },
+            { nama: "Rosdiana Yusuf, S.Pd., Gr", mapel: ["Bahasa Inggris", "Bahasa Inggris TL"], kelas: ["X 1", "X 2", "X 3", "X 4", "XI 1", "XI 2"] },
+            { nama: "Jumriah, S.Pd., Gr", mapel: ["IPS (Sosiologi)", "Sosiologi Pilihan"], kelas: ["X 2", "X 3", "X 4", "X 5", "XI 2", "XI 3", "XII 5"] },
+            { nama: "Kasniati, S.Pd., Gr", mapel: ["Bahasa Jerman", "PPKn", "BK"], kelas: ["X 3", "X 4", "XI 1", "XI 4", "XII 1", "XII 2", "XII 4", "XII 5"] },
+            { nama: "Fitriana, S.Pd., M.Pd., Gr", mapel: ["Biologi", "Biologi Pilihan", "Informatika"], kelas: ["X 1", "X 3", "X 5", "XI 1", "XI 2", "XI 3"] }
+        ];
+
+        const ALL_MAPEL_LIST = [
+            "PAI",
+            "PPKn",
+            "Bahasa Indonesia",
+            "Matematika",
+            "Matematika TL",
+            "Sejarah",
+            "Bahasa Inggris",
+            "Bahasa Inggris TL",
+            "Bahasa Jerman",
+            "PJOK",
+            "Seni Budaya",
+            "Mulok Bahasa Bugis",
+            "Informatika",
+            "Koding dan KA",
+            "IPA (Fisika)",
+            "Fisika Pilihan",
+            "IPA (Kimia)",
+            "Kimia Pilihan",
+            "IPA (Biologi)",
+            "Biologi",
+            "Biologi Pilihan",
+            "IPS (Sosiologi)",
+            "Sosiologi Pilihan",
+            "IPS (Geografi)",
+            "Geografi Pilihan",
+            "Ekonomi",
+            "Ekonomi Pilihan",
+            "Kewirausahaan",
+            "BK"
+        ];
+
+        let selectedTingkat = "XI";
+        let selectedKelas = "XI 4";
+        let selectedGuru = "";
+        let selectedMapel = "";
+        let showAllGuru = false;
+        
+        const form = document.forms['absensi-form'];
+        const btnSubmit = document.getElementById('btn-submit');
+        const btnText = document.getElementById('btn-text');
+        const loadingIcon = document.getElementById('loading-icon');
+        const toast = document.getElementById('toast');
+        const toastMessage = document.getElementById('toast-message');
+        const inputTanggal = document.getElementById('tanggal');
+
+        function buildWhatsAppPiketUrl(record) {
+            const cleanNumber = (WA_PIKET_NUMBER || '').replace(/[^0-9]/g, '');
+            const text =
+                `*NOTIFIKASI SI-HADIRGURU (UPT SMAN 3 SINJAI)*\n` +
+                `Tanggal: ${record.tanggal || '-'}\n` +
+                `Kelas: ${record.kelas || '-'} | Pertemuan: ${record.pertemuan || '-'}\n` +
+                `Guru: ${record.nama_guru || '-'}\n` +
+                `Mapel: ${record.mata_pelajaran || '-'}\n` +
+                `Status: ${record.status_kehadiran || '-'}\n` +
+                `Jam: ${record.jam_masuk || '-'} - ${record.jam_keluar || '-'}\n` +
+                `Siswa Hadir: ${record.jumlah_siswa || '-'}\n` +
+                `Materi/Catatan: ${record.materi || '-'}`;
+
+            const encodedText = encodeURIComponent(text);
+            return cleanNumber
+                ? `https://wa.me/${cleanNumber}?text=${encodedText}`
+                : `https://wa.me/?text=${encodedText}`;
+        }
+
+        function openWhatsAppIfRequested() {
+            if (!pendingWaUrl) return;
+            const urlToOpen = pendingWaUrl;
+            pendingWaUrl = null;
+            window.open(urlToOpen, '_blank', 'noopener,noreferrer');
+        }
+
+        function populateDatalists() {
+            const dlKelas = document.getElementById('list-kelas');
+            const dlGuru = document.getElementById('list-guru');
+            const dlMapel = document.getElementById('list-mapel');
+
+            const semuaKelas = Object.values(KELAS_PER_TINGKAT).flat();
+            dlKelas.innerHTML = semuaKelas.map(k => `<option value="${k}">`).join('');
+            dlGuru.innerHTML = SK_GURU_LIST.map(g => `<option value="${g.nama}">`).join('');
+            dlMapel.innerHTML = ALL_MAPEL_LIST.map(m => `<option value="${m}">`).join('');
+        }
+
+        function initQuickSelectors() {
+            const tingkatContainer = document.getElementById('quick-tingkat');
+            const kelasInput = document.getElementById('kelas');
+            if (kelasInput && !kelasInput.value) {
+                kelasInput.value = selectedKelas;
+            }
+
+            tingkatContainer.innerHTML = Object.keys(KELAS_PER_TINGKAT).map(tingkat => {
+                const active = tingkat === selectedTingkat;
+                return `<button type="button" onclick="pilihTingkat('${tingkat}')" class="px-3 py-1.5 rounded-lg text-xs font-semibold transition ${active ? 'bg-emerald-600 text-white shadow-sm' : 'bg-white text-gray-700 border border-gray-300 hover:bg-emerald-50'}">Kelas ${tingkat}</button>`;
+            }).join('');
+
+            renderKelasButtons();
+            renderGuruButtons();
+            renderMapelButtons();
+        }
+
+        function pilihTingkat(tingkat) {
+            selectedTingkat = tingkat;
+            const daftarKelas = KELAS_PER_TINGKAT[tingkat] || [];
+            if (daftarKelas.length > 0) {
+                selectedKelas = daftarKelas[0];
+                document.getElementById('kelas').value = selectedKelas;
+            }
+            initQuickSelectors();
+        }
+
+        function renderKelasButtons() {
+            const kelasContainer = document.getElementById('quick-kelas');
+            const daftarKelas = KELAS_PER_TINGKAT[selectedTingkat] || [];
+            kelasContainer.innerHTML = daftarKelas.map(kls => {
+                const active = kls === selectedKelas;
+                return `<button type="button" onclick="pilihKelas('${kls}')" class="px-3 py-1.5 rounded-lg text-xs font-semibold transition ${active ? 'bg-emerald-600 text-white shadow-sm' : 'bg-white text-gray-700 border border-gray-300 hover:bg-emerald-50'}">${kls}</button>`;
+            }).join('');
+        }
+
+        function pilihKelas(kls) {
+            selectedKelas = kls;
+            document.getElementById('kelas').value = kls;
+            renderKelasButtons();
+            renderGuruButtons();
+        }
+
+        function toggleShowAllGuru() {
+            showAllGuru = !showAllGuru;
+            const btn = document.getElementById('btn-toggle-all-guru');
+            btn.textContent = showAllGuru ? `Filter Guru Kelas ${selectedKelas}` : 'Tampilkan Semua Guru';
+            renderGuruButtons();
+        }
+
+        function renderGuruButtons() {
+            const guruContainer = document.getElementById('quick-guru');
+            const labelGuru = document.getElementById('label-quick-guru');
+
+            let daftarGuru = SK_GURU_LIST;
+            if (!showAllGuru && selectedKelas) {
+                const filtered = SK_GURU_LIST.filter(g => g.kelas.includes(selectedKelas));
+                if (filtered.length > 0) {
+                    daftarGuru = filtered;
+                    labelGuru.textContent = `3. Pilih Nama Guru Mengajar di ${selectedKelas} (${filtered.length} Guru)`;
+                } else {
+                    labelGuru.textContent = `3. Pilih Nama Guru Mengajar (Semua Guru)`;
+                }
+            } else {
+                labelGuru.textContent = `3. Pilih Nama Guru Mengajar (Semua ${SK_GURU_LIST.length} Guru)`;
+            }
+
+            guruContainer.innerHTML = daftarGuru.map(g => {
+                const active = g.nama === selectedGuru;
+                const safeNama = g.nama.replace(/'/g, "\'");
+                return `<button type="button" onclick="pilihGuru('${safeNama}')" class="px-2.5 py-1.5 rounded-lg text-xs font-medium transition ${active ? 'bg-emerald-600 text-white font-semibold shadow-sm' : 'bg-white text-gray-700 border border-gray-300 hover:bg-emerald-50'}">${g.nama}</button>`;
+            }).join('');
+        }
+
+        function pilihGuru(namaGuru) {
+            selectedGuru = namaGuru;
+            document.getElementById('nama_guru').value = namaGuru;
+
+            const guruObj = SK_GURU_LIST.find(g => g.nama === namaGuru);
+            if (guruObj && guruObj.mapel.length > 0) {
+                selectedMapel = guruObj.mapel[0];
+                document.getElementById('mata_pelajaran').value = selectedMapel;
+            }
+            renderGuruButtons();
+            renderMapelButtons();
+        }
+
+        function renderMapelButtons() {
+            const mapelContainer = document.getElementById('quick-mapel');
+            const labelMapel = document.getElementById('label-quick-mapel');
+
+            let daftarMapel = ALL_MAPEL_LIST;
+            if (selectedGuru) {
+                const guruObj = SK_GURU_LIST.find(g => g.nama === selectedGuru);
+                if (guruObj && guruObj.mapel.length > 0) {
+                    daftarMapel = guruObj.mapel;
+                    labelMapel.textContent = `4. Mata Pelajaran Diampu (${selectedGuru})`;
+                } else {
+                    labelMapel.textContent = `4. Pilih Mata Pelajaran (Klik)`;
+                }
+            } else {
+                labelMapel.textContent = `4. Pilih Mata Pelajaran (Semua Mapel)`;
+            }
+
+            mapelContainer.innerHTML = daftarMapel.map(mapel => {
+                const active = mapel === selectedMapel;
+                const safeMapel = mapel.replace(/'/g, "\'");
+                return `<button type="button" onclick="pilihMapel('${safeMapel}')" class="px-2.5 py-1.5 rounded-lg text-xs font-medium transition ${active ? 'bg-emerald-600 text-white font-semibold shadow-sm' : 'bg-white text-gray-700 border border-gray-300 hover:bg-emerald-50'}">${mapel}</button>`;
+            }).join('');
+        }
+
+        function pilihMapel(mapel) {
+            selectedMapel = mapel;
+            document.getElementById('mata_pelajaran').value = mapel;
+
+            if (!selectedGuru) {
+                const matchingGurus = SK_GURU_LIST.filter(g => g.mapel.includes(mapel) && (!selectedKelas || g.kelas.includes(selectedKelas)));
+                if (matchingGurus.length === 1) {
+                    selectedGuru = matchingGurus[0].nama;
+                    document.getElementById('nama_guru').value = selectedGuru;
+                    renderGuruButtons();
+                }
+            }
+            renderMapelButtons();
+        }
+
+        const viewGuru = document.getElementById('view-guru');
+        const viewAdmin = document.getElementById('view-admin');
+        const tabGuru = document.getElementById('tab-guru');
+        const tabAdmin = document.getElementById('tab-admin');
+
+        function switchTab(tab) {
+            if (tab === 'admin') {
+                const password = prompt("Mode Terkunci. Masukkan PIN Akses Tim Piket/Admin:");
+                if (password !== "1234") {
+                    showToast("PIN Salah! Akses ditolak.", true);
+                    return;
+                }
+                
+                viewGuru.classList.add('hidden');
+                viewAdmin.classList.remove('hidden');
+                
+                tabAdmin.classList.add('text-emerald-600', 'border-b-2', 'border-emerald-600');
+                tabAdmin.classList.remove('text-gray-500');
+                
+                tabGuru.classList.remove('text-emerald-600', 'border-b-2', 'border-emerald-600');
+                tabGuru.classList.add('text-gray-500');
+
+                startPiketAutoRefresh();
+            } else {
+                viewGuru.classList.remove('hidden');
+                viewAdmin.classList.add('hidden');
+                
+                tabGuru.classList.add('text-emerald-600', 'border-b-2', 'border-emerald-600');
+                tabGuru.classList.remove('text-gray-500');
+                
+                tabAdmin.classList.remove('text-emerald-600', 'border-b-2', 'border-emerald-600');
+                tabAdmin.classList.add('text-gray-500');
+
+                if (piketAutoRefreshTimer) {
+                    clearInterval(piketAutoRefreshTimer);
+                    piketAutoRefreshTimer = null;
+                }
+            }
+        }
+
+        function setTodayDate() {
+            const today = new Date();
+            const formattedDate = today.toISOString().split('T')[0];
+            inputTanggal.value = formattedDate;
+        }
+
+        setTodayDate();
+        populateDatalists();
+        initQuickSelectors();
+
+        // Kompresi ringan ±180 KB agar pengiriman Base64 ke Google Apps Script tetap lancar
+        document.getElementById('foto').addEventListener('change', function(event) {
+            const file = event.target.files[0];
+            const infoEl = document.getElementById('foto-info');
+            compressedFotoFile = null;
+
+            if (!file) {
+                infoEl.classList.add('hidden');
+                return;
+            }
+
+            infoEl.classList.remove('hidden');
+            infoEl.textContent = "Memproses kompresi foto (target ±180 KB)...";
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const img = new Image();
+                img.onload = function() {
+                    const canvas = document.createElement('canvas');
+                    const maxWidth = 600;
+                    let width = img.width;
+                    let height = img.height;
+
+                    if (width > maxWidth) {
+                        height = Math.round((height * maxWidth) / width);
+                        width = maxWidth;
+                    }
+
+                    canvas.width = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, width, height);
+
+                    let quality = 0.5;
+                    let dataUrl = canvas.toDataURL('image/jpeg', quality);
+                    while (dataUrl.length * 0.75 > 180 * 1024 && quality > 0.25) {
+                        quality -= 0.08;
+                        dataUrl = canvas.toDataURL('image/jpeg', quality);
+                    }
+
+                    const sizeKB = Math.round((dataUrl.length * 0.75) / 1024);
+                    compressedFotoFile = {
+                        dataUrl: dataUrl,
+                        base64: dataUrl.split(',')[1],
+                        mime: 'image/jpeg',
+                        name: file.name.replace(/\.[^/.]+$/, "") + "_compressed.jpg",
+                        sizeKB: sizeKB
+                    };
+                    infoEl.textContent = `✓ Foto siap unggah (${sizeKB} KB)`;
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        });
+
+        function showToast(message, isError = false) {
+            toastMessage.textContent = message;
+            if (isError) {
+                toast.classList.remove('bg-green-500');
+                toast.classList.add('bg-red-500');
+            } else {
+                toast.classList.remove('bg-red-500');
+                toast.classList.add('bg-green-500');
+            }
+            toast.classList.add('toast-enter-active');
+            setTimeout(() => {
+                toast.classList.remove('toast-enter-active');
+            }, 3500);
+        }
+
+        form.addEventListener('submit', e => {
+            e.preventDefault();
+            
+            btnText.textContent = 'Menyimpan...';
+            loadingIcon.classList.remove('hidden');
+            btnSubmit.disabled = true;
+            btnSubmit.classList.add('opacity-75', 'cursor-not-allowed');
+
+            const formData = new FormData(form);
+            const record = simpanKeLogMonitoring(formData);
+
+            if (document.getElementById('notif_wa').checked) {
+                pendingWaUrl = buildWhatsAppPiketUrl(record);
+            } else {
+                pendingWaUrl = null;
+            }
+
+            const payload = {
+                tanggal: record.tanggal,
+                kelas: record.kelas,
+                pertemuan: record.pertemuan,
+                nama_guru: record.nama_guru,
+                mata_pelajaran: record.mata_pelajaran,
+                status_kehadiran: record.status_kehadiran,
+                jam_masuk: record.jam_masuk,
+                jam_keluar: record.jam_keluar,
+                jumlah_siswa: record.jumlah_siswa,
+                materi: record.materi,
+                notif_wa: document.getElementById('notif_wa').checked ? 'ya' : 'tidak',
+                foto_base64: '',
+                foto_mime: '',
+                foto_nama: ''
+            };
+
+            const fileInput = document.getElementById('foto');
+            if (compressedFotoFile) {
+                payload.foto_base64 = compressedFotoFile.base64;
+                payload.foto_mime = compressedFotoFile.mime;
+                payload.foto_nama = compressedFotoFile.name;
+                sendToServer(payload);
+            } else if (fileInput.files.length > 0) {
+                const file = fileInput.files[0];
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    payload.foto_base64 = event.target.result.split(',')[1];
+                    payload.foto_mime = file.type;
+                    payload.foto_nama = file.name;
+                    sendToServer(payload);
+                };
+                reader.readAsDataURL(file);
+            } else {
+                sendToServer(payload);
+            }
+        });
+
+        function sendToServer(payload) {
+            fetch(scriptURL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                body: JSON.stringify(payload)
+            })
+            .then(response => response.text())
+            .then(text => {
+                try {
+                    const resJson = JSON.parse(text);
+                    if (resJson.status === 'error') {
+                        throw new Error(resJson.message || 'Gagal menyimpan ke database');
+                    }
+                } catch (_) {}
+                handleSuccess();
+            })
+            .catch(error => {
+                console.warn('Fallback no-cors JSON POST:', error.message);
+                fetch(scriptURL, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify(payload)
+                })
+                .then(() => handleSuccess())
+                .catch(err2 => {
+                    console.error('Error!', err2.message);
+                    showToast('Terjadi kesalahan saat menyimpan data ke database.', true);
+                    resetButton();
+                });
+            });
+        }
+
+        function handleSuccess() {
+            const hasWa = Boolean(pendingWaUrl);
+            openWhatsAppIfRequested();
+            showToast(hasWa ? 'Kehadiran dicatat & WhatsApp Tim Piket dibuka!' : 'Kehadiran berhasil dicatat!');
+            form.reset();
+            compressedFotoFile = null;
+            selectedGuru = "";
+            selectedMapel = "";
+            document.getElementById('foto-info').classList.add('hidden');
+            setTodayDate();
+            document.getElementById('kelas').value = selectedKelas;
+            initQuickSelectors();
+            resetButton();
+            setTimeout(() => {
+                renderMonitoringTable();
+            }, 1200);
+        }
+
+        function resetButton() {
+            btnText.textContent = 'Simpan Kehadiran';
+            loadingIcon.classList.add('hidden');
+            btnSubmit.disabled = false;
+            btnSubmit.classList.remove('opacity-75', 'cursor-not-allowed');
+        }
+
+        function getStatusBadge(statusText) {
+            const val = (statusText || '').toLowerCase();
+            if (val.includes('tatap muka')) {
+                return `<span class="inline-block px-2 py-0.5 rounded-full font-semibold bg-emerald-100 text-emerald-800">${statusText}</span>`;
+            }
+            if (val.includes('memberi tugas')) {
+                return `<span class="inline-block px-2 py-0.5 rounded-full font-semibold bg-amber-100 text-amber-800">${statusText}</span>`;
+            }
+            if (val.includes('pjj') || val.includes('mandiri')) {
+                return `<span class="inline-block px-2 py-0.5 rounded-full font-semibold bg-orange-100 text-orange-800">${statusText}</span>`;
+            }
+            if (val.includes('izin') || val.includes('sakit') || val.includes('kosong')) {
+                return `<span class="inline-block px-2 py-0.5 rounded-full font-semibold bg-red-100 text-red-800">${statusText}</span>`;
+            }
+            return `<span class="inline-block px-2 py-0.5 rounded-full font-semibold bg-gray-100 text-gray-800">${statusText || '-'}</span>`;
+        }
+
+        function simpanKeLogMonitoring(formData) {
+            const record = {
+                tanggal: formData.get('tanggal') || '',
+                kelas: formData.get('kelas') || '',
+                pertemuan: formData.get('pertemuan') || '',
+                nama_guru: formData.get('nama_guru') || '',
+                mata_pelajaran: formData.get('mata_pelajaran') || '',
+                status_kehadiran: formData.get('status_kehadiran') || '',
+                jam_masuk: formData.get('jam_masuk') || '',
+                jam_keluar: formData.get('jam_keluar') || '',
+                jumlah_siswa: formData.get('jumlah_siswa') || '',
+                materi: formData.get('materi') || '',
+                notif_wa: formData.get('notif_wa') ? 'Ya' : 'Tidak',
+                foto_url: ''
+            };
+            const logs = JSON.parse(localStorage.getItem(LOG_STORAGE_KEY) || '[]');
+            logs.unshift(record);
+            localStorage.setItem(LOG_STORAGE_KEY, JSON.stringify(logs));
+            return record;
+        }
+
+        function startPiketAutoRefresh() {
+            renderMonitoringTable();
+            if (piketAutoRefreshTimer) clearInterval(piketAutoRefreshTimer);
+            piketAutoRefreshTimer = setInterval(() => {
+                renderMonitoringTable();
+            }, 15000);
+        }
+
+        async function renderMonitoringTable() {
+            const tbody = document.getElementById('tbody-monitoring-piket');
+            const lastSync = document.getElementById('last-sync-text');
+            if (!tbody) return;
+
+            let logs = JSON.parse(localStorage.getItem(LOG_STORAGE_KEY) || '[]');
+            let sumberData = 'Cache Lokal';
+
+            if (scriptURL && scriptURL !== 'URL_APPS_SCRIPT_ANDA_DI_SINI') {
+                try {
+                    const separator = scriptURL.includes('?') ? '&' : '?';
+                    const res = await fetch(`${scriptURL}${separator}_t=${Date.now()}`, { cache: 'no-store' });
+                    const cloudData = await res.json();
+                    if (Array.isArray(cloudData)) {
+                        logs = cloudData;
+                        localStorage.setItem(LOG_STORAGE_KEY, JSON.stringify(logs));
+                        sumberData = 'Cloud Spreadsheet (Presensi_SMAN3Sinjai)';
+                    }
+                } catch (err) {
+                    console.warn('Menggunakan cache lokal karena gagal memuat cloud:', err);
+                }
+            }
+
+            if (lastSync) {
+                lastSync.textContent = `Terakhir diperbarui: ${new Date().toLocaleTimeString('id-ID')} (${sumberData})`;
+            }
+
+            if (logs.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="7" class="p-4 text-center text-gray-400">Belum ada data presensi tercatat.</td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = logs.map(item => `
+                <tr class="hover:bg-gray-50">
+                    <td class="p-2.5 whitespace-nowrap">${item.tanggal}</td>
+                    <td class="p-2.5 text-center"><span class="font-semibold text-gray-800">${item.kelas || '-'}</span><br><span class="text-gray-500">Pert. ${item.pertemuan}</span></td>
+                    <td class="p-2.5"><span class="font-semibold text-gray-800">${item.nama_guru}</span><br><span class="text-gray-500">${item.mata_pelajaran}</span></td>
+                    <td class="p-2.5">${getStatusBadge(item.status_kehadiran)}</td>
+                    <td class="p-2.5 whitespace-nowrap">${item.jam_masuk} - ${item.jam_keluar}</td>
+                    <td class="p-2.5 text-center">${item.jumlah_siswa}</td>
+                    <td class="p-2.5">${item.materi}${item.foto_url && item.foto_url.startsWith('http') ? `<br><a href="${item.foto_url}" target="_blank" class="text-emerald-600 underline font-medium">Lihat Foto</a>` : (item.foto_url ? `<br><span class="text-amber-600 text-[11px]">${item.foto_url}</span>` : '')}</td>
+                </tr>
+            `).join('');
+        }
+
+        function exportRekapExcel() {
+            const logs = JSON.parse(localStorage.getItem(LOG_STORAGE_KEY) || '[]');
+            if (logs.length === 0) {
+                showToast("Belum ada data untuk diunduh ke Excel.", true);
+                return;
+            }
+            const ws = XLSX.utils.json_to_sheet(logs);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Rekap_SMAN3Sinjai");
+            XLSX.writeFile(wb, `Rekap_SI-HadirGuru_${new Date().toISOString().split('T')[0]}.xlsx`);
+        }
+
+        function exportRekapPDF() {
+            const logs = JSON.parse(localStorage.getItem(LOG_STORAGE_KEY) || '[]');
+            if (logs.length === 0) {
+                showToast("Belum ada data untuk diunduh ke PDF.", true);
+                return;
+            }
+            const area = document.getElementById('area-rekap-cetak');
+            html2pdf().set({
+                margin: 0.4,
+                filename: `Laporan_SI-HadirGuru_${new Date().toISOString().split('T')[0]}.pdf`,
+                image: { type: 'jpeg', quality: 0.98 },
+                html2canvas: { scale: 2 },
+                jsPDF: { unit: 'in', format: 'a4', orientation: 'landscape' }
+            }).from(area).save();
+        }
+    </script>
+</body>
+</html>
